@@ -2,26 +2,29 @@ import React, { useState } from "react";
 import URL from "../../Url_backend/Url";
 import axios from "axios";
 
-const Room = () => {
-  const [nama, setNama] = useState<string>("");
+const Room = ({ onRoomCreated }: { onRoomCreated: () => void }) => {
+    const [nama, setNama] = useState<string>("");
 
-  const handlesubmit = async (e: React.SyntheticEvent) => {
-    e.preventDefault();
-    const response = await axios.post(
-      `${URL}/ws/createRoom`,
-      {
-        Id: Math.random().toString(36).substring(7),
-        RoomId: Math.random().toString(36).substring(7),
-        Name: nama,
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
+    const handlesubmit = async (e: React.SyntheticEvent) => {
+      e.preventDefault();
+      const response = await axios.post(
+        `${URL}/ws/createRoom`,
+        {
+          Id: Math.random().toString(36).substring(7),
+          RoomId: Math.random().toString(36).substring(7),
+          Name: nama,
         },
-      }
-    );
-    console.log(response.data);
-  };
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      console.log(response.data);
+  
+      // Memanggil fungsi onRoomCreated yang diteruskan dari HomeRoom untuk memperbarui daftar ruang
+      onRoomCreated();
+    };
   return (
     <>
       <div className="p-6 space-y-4 md:space-y-6 sm:p-8">

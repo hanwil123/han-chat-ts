@@ -1,79 +1,73 @@
 import { useContext, useEffect, useRef, useState } from 'react';
 import Headerchat from './Headerchat';
-import { SocketContext } from '../Provider/SocketContext';
-import axios from 'axios';
-import URL from '../Url_backend/Url';
+import { useSocket } from '../Provider/SocketContext';
 import autosize from 'autosize';
-import { useNavigate } from "react-router-dom";
+import useStore from '../Penyimpanan/Penyimpanan_tokenuser';
+import Chatbuble from './Chatbuble';
+import { AuthContext } from '../Provider/Auth_provider';
+import URL_WS from '../Url_backend/Url_Ws';
 
-const Chat = () => {
-
-type Message = {
+export type Message = {
   content: string;
   type: 'recv' | 'self';
-  username : string;
-  room_id : string;
+  username: string;
+  roomId: string;
   timestamp: number;
-}
-
+};
+const Chat = () => {
+// Define the Message type
 const [users, setUsers] = useState<Array<{ username : string}>>([]);
 const [messages, setMessages] = useState<Message[]>([]);
-const [inputMessage, setInputMessage] = useState<string>("");
+const [inputMessage, setInputMessage] = useState<string>('');
 const textarea = useRef<HTMLTextAreaElement>(null);
-const { conn } = useContext(SocketContext);
-const navigate = useNavigate();
+const { conn, setConn } = useSocket();
+const roomId = useStore((state: any) => state.roomId);
+const tokenuser = useStore((state: any) => state.tokenuser);
+const username = useStore((state: any) => state.username);
+const {user} = useContext(AuthContext);
 
-useEffect(() => {
-    if (conn === null) {
-        navigate("/RoomDashboard");
-    }
-    const roomId = conn?.url.split("/")[5];
-    async function getUsers() {
-        try {
-           const response = await axios.get(`${URL}/ws/GetClients/${roomId}`, {
-            headers: {
-                "Content-Type": "application/json",
-            }
-           }) 
-           const datas = response.data;
-           setUsers(datas);
-           console.log("data : ", datas)
-        } catch (error) {
-            console.log(error);
-        }
-    }
-    getUsers();
-}, []) //get client in the room
+
 useEffect(() => {
     if (textarea.current) {
         autosize(textarea.current);
     }
-    if (conn === null) {
-        navigate("/RoomDashboard");
-    }
-    if (conn) { // Tambahkan pengecekan null
-        conn.onmessage = (message) => {
-            const m: Message = JSON.parse(message.data);
-            if (m.content === 'A new user has been joined') {
-                setUsers(prevUsers => [...prevUsers, { username: m.username }])
-            }
-            if (m.content === 'A user has been left') {
-                setUsers(prevUsers => prevUsers.filter((user) => user.username !== m.username))
-                setMessages(prevMessages => [...prevMessages, m])
-            }
+    if (conn !== null && conn.readyState == WebSocket.OPEN) {
+      console.log("conn chat: ", conn);
+      conn.send("server berhasil diakses")
+      conn.onmessage = (message) => {
+        const m = JSON.parse(message.data);
+        if (m.type === 'recv') {
+          if (m.username !== username) {
+            setMessages(prevMessages => [...prevMessages, m]);
+          }
         }
+      };
     }
 }, [textarea, messages, users, conn]) // get websocket
 
 // Implement logic to send a message
 // Implement logic to send a message
+// ...
+
 const sendMessage = async (): Promise<void> => {
-    if (!textarea.current?.value) return;
-    if (conn) {
-        conn.send(textarea.current.value); // Menggunakan optional chaining di sini
-    }
+  if (!textarea.current?.value) return;
+
+  const newMessage: Message = {
+    content: textarea.current.value,
+    type: 'self', // Set the type of the message to 'self'
+    username: username, // Replace 'YourUsername' with the actual username
+    roomId: roomId, // Replace 'YourRoomID' with the actual room ID
+    timestamp: Date.now(),
+  };
+
+  setMessages(prevMessages => [...prevMessages, newMessage]); // Add the new message to the messages state
+
+  if (conn !== null && conn.readyState === WebSocket.OPEN) {
+    conn.send(JSON.stringify(newMessage)); // Send the new message through the WebSocket connection
     textarea.current.value = "";
+  }
 };
+
   return (
     <>
       <div className=" inline-flex flex-col h-full py-5 w-[460px] px-5">
@@ -81,28 +75,7 @@ const sendMessage = async (): Promise<void> => {
           <Headerchat />
         </div>
         <div>
-        {messages.map((msg : Message, index : number) => (
-  <div className={`chat ${msg.type === "recv" ? "chat-start" : "chat-end"}`} key={index}>
-    <div className="chat-image avatar">
-      <div className="w-10 rounded-full">
-        <img src="/images/stock/photo-1534528741775-53994a69daeb.jpg" />
-      </div>
-    </div>
-    <div className="chat-header">
-      {msg.type === "recv" ? "Me" : "Receiver"}
-      <time className="text-xs opacity-50">
-        {new Date(msg.timestamp).toLocaleTimeString()}
-      </time>
-    </div>
-    <div className="chat-bubble">{msg.content}</div>
-    <div className="chat-footer opacity-50">
-      {msg.type === "self"
-        ? "Delivered"
-        : `Seen at ${new Date(msg.timestamp).toLocaleTimeString()}`}
-    </div>
-  </div>
-))}
-
+          <Chatbuble data={messages}/>
           <div className=" relative mt-20">
             <div className="join">
               <div className="">
@@ -117,7 +90,7 @@ const sendMessage = async (): Promise<void> => {
                 </div>
               </div>
               <div className="indicator">
-                <button className="btn join-item" onClick={sendMessage}>
+                <button className="btn join-item" onClick={() => sendMessage()}>
                   Send
                 </button>
               </div>

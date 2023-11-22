@@ -7,7 +7,6 @@ const Cardirectory = () => {
           <div>
             <img
               className=" w-10 h-10 my-2 mx-2 border rounded-lg"
-              src="/iui.jpg"
               alt=""
             />
           </div>

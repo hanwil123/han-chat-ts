@@ -12,41 +12,70 @@ const HomeRoom: React.FC = () => {
   const navigate = useNavigate();
   const tokenuser = useStore((state: any) => state.tokenuser);
   const username = useStore((state: any) => state.username);
+  const setRoomId = useStore((state: any) => state.setRoomId);
   const { setConn } = useContext(SocketContext);
 
-  useEffect(() => {
-    const fetchRoom = async () => {
-      try {
-        const response = await axios.get(`${URL}/ws/GetRoom`, {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-        const datas = response.data;
-        console.log(datas);
-        setRoomDatas(datas);
-      } catch (error) {
-        console.log(error);
+  const setupWebSocket = (roomId: string) => {
+    const ws = new WebSocket(
+      `${URL_WS}/ws/joinRoom/${roomId}?userId=${tokenuser}&username=${username}`
+    );
+
+    ws.onerror = (error) => {
+      console.log("WebSocket error: ", error);
+    };
+
+    ws.onopen = () => {
+      if (ws.readyState === ws.OPEN) {
+        ws.send("Hello Server!");
+        setConn(ws);
+        console.log(ws);
+        navigate("/Chat");
       }
     };
-    fetchRoom();
-  }, []);
+    ws.binaryType = "arraybuffer";
+
+    ws.onclose = () => {
+      console.log("WebSocket is closed. Reconnecting...");
+      // Reconnect after a delay (e.g., 3 seconds)
+      setTimeout(() => {
+        setupWebSocket(roomId);
+      }, 3000);
+    };
+
+    return ws;
+  };
 
   const joinRoom = async (roomId: string) => {
     console.log("room id : ", roomId);
     console.log("token user : ", tokenuser);
     console.log("username : ", username);
-    const ws = new WebSocket(
-      `${URL_WS}/joinRoom/${roomId}?userId=${tokenuser}&username=${username}`
-    );
-    ws.onerror = (error) => {
-      console.log("WebSocket error: ", error);
-    };
-    ws.onopen = () => {
-      setConn(ws);
-      console.log(ws);
-      navigate("/Chat");
-    };
+    setRoomId(roomId);
+
+    setupWebSocket(roomId);
+  };
+
+  const fetchRoom = async () => {
+    try {
+      const response = await axios.get(`${URL}/ws/GetRoom`, {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      const datas = response.data;
+      console.log(datas);
+      setRoomDatas(datas);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  useEffect(() => {
+    fetchRoom();
+  }, []);
+
+  const handleRoomCreated = () => {
+    // Panggil fungsi fetchRoom untuk mendapatkan daftar ruang terbaru setelah membuat ruang baru
+    fetchRoom();
   };
   return (
     <>
@@ -54,8 +83,8 @@ const HomeRoom: React.FC = () => {
         <div className="container px-5 mx-auto">
           <div className="flex flex-col items-center justify-center px-6 py-8 mx-auto lg:py-0 ">
             <div className="w-full bg-white rounded-lg shadow dark:border md:mt-0 sm:max-w-md xl:p-0 dark:bg-gray-800 dark:border-gray-700">
-              <Room />
-            </div>
+            <Room onRoomCreated={handleRoomCreated} />
+          </div>
           </div>
           <div className="flex flex-wrap -m-4 text-center py-10">
             {roomDatas.map((roomData) => (
